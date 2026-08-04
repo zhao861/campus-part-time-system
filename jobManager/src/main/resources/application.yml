@@ -1,0 +1,12 @@
+spring:
+  application:
+    name: jobManager
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/jobmanager
+    username: root
+    password: zhao20041003
+mybatis:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    map-underscore-to-camel-case: true
