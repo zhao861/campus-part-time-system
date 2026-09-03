@@ -11,14 +11,22 @@ CREATE TABLE IF NOT EXISTS user (
     permission INT NOT NULL COMMENT '0-学生，1-兼职发布者，2-管理员'
 );
 
--- 创建job表
+-- 创建job表（含AI审核字段：0-待AI审核,1-已发布,2-待人工审核,3-已驳回）
 CREATE TABLE IF NOT EXISTS job (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     publisher_name VARCHAR(100) NOT NULL,
     salary INT NOT NULL,
     create_time DATETIME NOT NULL,
-    update_time DATETIME NOT NULL
+    update_time DATETIME NOT NULL,
+    audit_status INT NOT NULL DEFAULT 0 COMMENT '0-待AI审核,1-已发布,2-待人工审核,3-已驳回',
+    risk_level VARCHAR(10) NULL COMMENT 'AI风险等级: low/medium/high',
+    ai_reason VARCHAR(500) NULL COMMENT 'AI审核意见/驳回理由',
+    ai_model VARCHAR(50) NULL COMMENT '初审使用的模型名',
+    ai_audit_time DATETIME NULL COMMENT 'AI初审时间',
+    reviewer_name VARCHAR(100) NULL COMMENT '人工复审管理员',
+    review_time DATETIME NULL COMMENT '人工复审时间',
+    INDEX idx_job_audit_status (audit_status)
 );
 
 -- 创建wish_job表

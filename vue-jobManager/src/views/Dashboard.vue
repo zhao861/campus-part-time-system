@@ -79,6 +79,12 @@
               <el-icon><Setting /></el-icon>
               <span>报名管理</span>
             </el-menu-item>
+
+            <!-- 管理员用户（permission=2）的功能：AI初审 medium/high 的兼职人工复审 -->
+            <el-menu-item index="adminReview" v-if="userPermission === 2">
+              <el-icon><CircleCheck /></el-icon>
+              <span>兼职复审</span>
+            </el-menu-item>
           </el-menu>
         </el-aside>
 
@@ -378,6 +384,25 @@
                     {{ new Date(scope.row.updateTime).toLocaleString() }}
                   </template>
                 </el-table-column>
+                <!-- AI 智能审核状态 -->
+                <el-table-column prop="auditStatus" label="审核状态" width="110">
+                  <template #default="scope">
+                    <el-tag :type="auditStatusTagType(scope.row.auditStatus)">
+                      {{ auditStatusText(scope.row.auditStatus) }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="riskLevel" label="风险等级" width="90">
+                  <template #default="scope">
+                    <span v-if="scope.row.riskLevel">{{ riskLevelText(scope.row.riskLevel) }}</span>
+                    <span v-else>-</span>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="aiReason" label="审核意见" min-width="160" show-overflow-tooltip>
+                  <template #default="scope">
+                    {{ scope.row.aiReason || '-' }}
+                  </template>
+                </el-table-column>
                 <el-table-column label="操作" width="150">
                   <template #default="scope">
                     <el-button type="primary" @click="handleModifyJob(scope.row)" size="small">
@@ -458,6 +483,64 @@
             </el-card>
           </div>
 
+          <!-- 兼职复审内容（管理员）：AI初审判定 medium/high 的兼职 -->
+          <div v-if="activeMenu === 'adminReview'">
+            <el-card>
+              <template #header>
+                <div class="card-header">
+                  <h3>兼职复审（AI初审待人工复核）</h3>
+                </div>
+              </template>
+              <el-table :data="currentAdminReviewList" stripe style="width: 100%">
+                <el-table-column prop="id" label="职位ID" width="80" />
+                <el-table-column prop="name" label="职位名称" min-width="150" />
+                <el-table-column prop="publisherName" label="发布者" min-width="120" />
+                <el-table-column prop="salary" label="时薪" width="100">
+                  <template #default="scope"> {{ scope.row.salary }} 元/时 </template>
+                </el-table-column>
+                <el-table-column prop="riskLevel" label="AI风险等级" width="110">
+                  <template #default="scope">
+                    <el-tag :type="riskLevelTagType(scope.row.riskLevel)">
+                      {{ riskLevelText(scope.row.riskLevel) }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="aiReason" label="AI审核意见" min-width="180" show-overflow-tooltip>
+                  <template #default="scope">
+                    {{ scope.row.aiReason || '-' }}
+                  </template>
+                </el-table-column>
+                <el-table-column prop="createTime" label="发布时间" min-width="180">
+                  <template #default="scope">
+                    {{ new Date(scope.row.createTime).toLocaleString() }}
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="180">
+                  <template #default="scope">
+                    <el-button type="success" @click="handleAdminPass(scope.row)" size="small">
+                      通过
+                    </el-button>
+                    <el-button type="danger" @click="handleAdminReject(scope.row)" size="small">
+                      驳回
+                    </el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+              <!-- 复审列表分页 -->
+              <div style="margin-top: 20px; text-align: right">
+                <el-pagination
+                  v-model:current-page="pagination.adminReviewList.currentPage"
+                  v-model:page-size="pagination.adminReviewList.pageSize"
+                  :page-sizes="[10, 15, 20, 25]"
+                  :total="pagination.adminReviewList.total"
+                  layout="total, sizes, prev, pager, next, jumper"
+                  @size-change="handlePageSizeChange('adminReviewList')"
+                  @current-change="handleCurrentPageChange('adminReviewList')"
+                />
+              </div>
+            </el-card>
+          </div>
+
           <!-- 修改密码对话框 -->
           <el-dialog v-model="changePasswordDialogVisible" title="修改密码" width="500px">
             <el-form
@@ -519,6 +602,7 @@ import {
   Star,
   Document,
   Setting,
+  CircleCheck,
 } from '@element-plus/icons-vue'
 import { jobApi, wishJobApi, signupApi, userApi } from '../api'
 
@@ -596,6 +680,7 @@ const wishJobList = ref([])
 const myJobs = ref([])
 const signupList = ref([])
 const mySignupList = ref([])
+const adminReviewList = ref([])
 const jobFormRef = ref()
 const searchQuery = ref('')
 
@@ -631,6 +716,11 @@ const pagination = reactive({
     total: 0,
   },
   mySignupList: {
+    currentPage: 1,
+    pageSize: 15,
+    total: 0,
+  },
+  adminReviewList: {
     currentPage: 1,
     pageSize: 15,
     total: 0,
@@ -700,6 +790,13 @@ const currentMySignupList = computed(() => {
   return mySignupList.value.slice(start, end)
 })
 
+const currentAdminReviewList = computed(() => {
+  const { currentPage, pageSize } = pagination.adminReviewList
+  const start = (currentPage - 1) * pageSize
+  const end = start + pageSize
+  return adminReviewList.value.slice(start, end)
+})
+
 // 跟踪已收藏和已报名的职位
 const wishlistedJobs = ref([])
 const signedUpJobs = ref([])
@@ -726,6 +823,24 @@ const jobForm = reactive({
 // 检查职位是否已收藏
 const isWishlisted = (jobName) => {
   return wishlistedJobs.value.some((job) => job.name === jobName)
+}
+
+// AI 审核状态展示辅助
+const auditStatusText = (status) => {
+  const map = { 0: '待AI审核', 1: '已发布', 2: '待人工审核', 3: '已驳回' }
+  return map[status] ?? '未知'
+}
+const auditStatusTagType = (status) => {
+  const map = { 0: 'info', 1: 'success', 2: 'warning', 3: 'danger' }
+  return map[status] ?? 'info'
+}
+const riskLevelText = (level) => {
+  const map = { low: '低危', medium: '中危', high: '高危' }
+  return map[level] ?? '-'
+}
+const riskLevelTagType = (level) => {
+  const map = { low: 'success', medium: 'warning', high: 'danger' }
+  return map[level] ?? 'info'
 }
 
 // 检查职位是否已报名
@@ -797,6 +912,8 @@ const handleMenuSelect = (index) => {
     loadSignupList()
   } else if (index === 'mySignup') {
     loadMySignupList()
+  } else if (index === 'adminReview') {
+    loadAdminReviewList()
   } else if (index === 'profile') {
     // 跳转到个人资料页面
     router.push('/profile')
@@ -890,6 +1007,64 @@ const loadMyJobs = async () => {
   } catch (error) {
     console.error('获取我的发布失败:', error)
     ElMessage.error('获取我的发布失败')
+  }
+}
+
+// 加载管理员复审待办列表（AI初审判定 medium/high 的兼职）
+const loadAdminReviewList = async () => {
+  try {
+    const res = await jobApi.getAdminReviewList()
+    if (res.code === 200) {
+      adminReviewList.value = res.data || []
+      pagination.adminReviewList.total = adminReviewList.value.length
+      pagination.adminReviewList.currentPage = 1
+    } else {
+      ElMessage.error(res.data || '获取复审列表失败')
+    }
+  } catch (error) {
+    console.error('获取复审列表失败:', error)
+    ElMessage.error('获取复审列表失败')
+  }
+}
+
+// 管理员复审通过
+const handleAdminPass = async (job) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定通过兼职「${job.name}」的复审吗？通过后将立即发布。`,
+      '复审通过确认',
+      { confirmButtonText: '通过', cancelButtonText: '取消', type: 'warning' },
+    )
+    const res = await jobApi.adminPass({ jobId: job.id, reason: '' })
+    if (res.code === 200) {
+      ElMessage.success(res.data || '复审通过')
+      loadAdminReviewList()
+    } else {
+      ElMessage.error(res.data || '复审失败')
+    }
+  } catch (error) {
+    if (error !== 'cancel' && error?.message !== 'cancel') console.error('复审失败:', error)
+  }
+}
+
+// 管理员复审驳回（理由必填）
+const handleAdminReject = async (job) => {
+  try {
+    const { value } = await ElMessageBox.prompt('请输入驳回理由（商家可见，修改后可重新提交）', '驳回兼职', {
+      confirmButtonText: '驳回',
+      cancelButtonText: '取消',
+      inputPlaceholder: '例如：涉嫌刷单诈骗，不予发布',
+      inputValidator: (input) => (input && input.trim() ? true : '驳回理由不能为空'),
+    })
+    const res = await jobApi.adminReject({ jobId: job.id, reason: value.trim() })
+    if (res.code === 200) {
+      ElMessage.success(res.data || '已驳回')
+      loadAdminReviewList()
+    } else {
+      ElMessage.error(res.data || '驳回失败')
+    }
+  } catch (error) {
+    if (error !== 'cancel' && error?.message !== 'cancel') console.error('驳回失败:', error)
   }
 }
 

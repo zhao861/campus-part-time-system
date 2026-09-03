@@ -30,4 +30,25 @@ public class Job {
 
     private LocalDateTime updateTime = LocalDateTime.now();
 
+    /** 0-待AI审核, 1-已发布, 2-待人工审核, 3-已驳回 */
+    private Integer auditStatus = 0;
+
+    /** AI 风险等级: low/medium/high */
+    private String riskLevel;
+
+    /** AI 审核意见/人工驳回理由 */
+    private String aiReason;
+
+    /** 初审使用的模型名 */
+    private String aiModel;
+
+    /** AI 初审时间 */
+    private LocalDateTime aiAuditTime;
+
+    /** 人工复审管理员 */
+    private String reviewerName;
+
+    /** 人工复审时间 */
+    private LocalDateTime reviewTime;
+
 }

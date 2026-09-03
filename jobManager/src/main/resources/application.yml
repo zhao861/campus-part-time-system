@@ -10,3 +10,12 @@ mybatis:
   configuration:
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
     map-underscore-to-camel-case: true
+ai:
+  audit:
+    enabled: true
+    base-url: https://api.deepseek.com
+    api-key: ${AI_API_KEY:}
+    model: deepseek-chat
+    timeout-seconds: 8
+    response-format-json: false
+    low-pass-threshold: low
